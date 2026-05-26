@@ -1,0 +1,151 @@
+import { createContext, useContext, useState, ReactNode } from 'react';
+
+interface Cliente {
+  id: number;
+  nombre: string;
+  email: string;
+  telefono: string;
+  ciudad: string;
+  fecha: string;
+}
+
+interface Venta {
+  id: string;
+  cliente: string;
+  fecha: string;
+  metodoPago: string;
+  items: VentaItem[];
+  subtotal: number;
+  iva: number;
+  total: number;
+  notas: string;
+}
+
+interface VentaItem {
+  producto: string;
+  cantidad: number;
+  precio: number;
+}
+
+interface AppContextType {
+  clientes: Cliente[];
+  ventas: Venta[];
+  agregarCliente: (cliente: Omit<Cliente, 'id' | 'fecha'>) => void;
+  agregarVenta: (venta: Omit<Venta, 'id'>) => void;
+  buscarClientes: (query: string) => Cliente[];
+  editarCliente: (id: number, clienteData: Omit<Cliente, 'id' | 'fecha'>) => void;
+  obtenerCliente: (id: number) => Cliente | undefined;
+}
+
+const AppContext = createContext<AppContextType | undefined>(undefined);
+
+export function AppProvider({ children }: { children: ReactNode }) {
+  const [clientes, setClientes] = useState<Cliente[]>([
+    { id: 1, nombre: 'Juan Pérez', email: 'juan@email.com', telefono: '300-123-4567', ciudad: 'Bogotá', fecha: '08 Abr' },
+    { id: 2, nombre: 'María García', email: 'maria@email.com', telefono: '301-234-5678', ciudad: 'Medellín', fecha: '08 Abr' },
+    { id: 3, nombre: 'Carlos López', email: 'carlos@email.com', telefono: '302-345-6789', ciudad: 'Cali', fecha: '07 Abr' },
+    { id: 4, nombre: 'Ana Martínez', email: 'ana@email.com', telefono: '303-456-7890', ciudad: 'Barranquilla', fecha: '07 Abr' },
+    { id: 5, nombre: 'Luis Rodríguez', email: 'luis@email.com', telefono: '304-567-8901', ciudad: 'Cartagena', fecha: '06 Abr' },
+    { id: 6, nombre: 'Diana Herrera', email: 'diana@email.com', telefono: '305-678-9012', ciudad: 'Bogotá', fecha: '06 Abr' },
+  ]);
+
+  const [ventas, setVentas] = useState<Venta[]>([
+    { 
+      id: 'V-001', 
+      cliente: 'Carlos Gómez', 
+      fecha: '08 Abr', 
+      metodoPago: 'Efectivo',
+      items: [{ producto: 'Producto A', cantidad: 2, precio: 225000 }],
+      subtotal: 450000,
+      iva: 85500,
+      total: 535500,
+      notas: ''
+    },
+    { 
+      id: 'V-002', 
+      cliente: 'Ana Torres', 
+      fecha: '08 Abr', 
+      metodoPago: 'Tarjeta',
+      items: [{ producto: 'Producto B', cantidad: 1, precio: 320000 }],
+      subtotal: 320000,
+      iva: 60800,
+      total: 380800,
+      notas: ''
+    },
+    { 
+      id: 'V-003', 
+      cliente: 'Luis Pérez', 
+      fecha: '07 Abr', 
+      metodoPago: 'Transferencia',
+      items: [{ producto: 'Producto C', cantidad: 1, precio: 180000 }],
+      subtotal: 180000,
+      iva: 34200,
+      total: 214200,
+      notas: ''
+    },
+  ]);
+
+  const agregarCliente = (clienteData: Omit<Cliente, 'id' | 'fecha'>) => {
+    const nuevoCliente: Cliente = {
+      ...clienteData,
+      id: clientes.length + 1,
+      fecha: new Date().toLocaleDateString('es-CO', { day: '2-digit', month: 'short' }),
+    };
+    setClientes([nuevoCliente, ...clientes]);
+  };
+
+  const agregarVenta = (ventaData: Omit<Venta, 'id'>) => {
+    const nuevaVenta: Venta = {
+      ...ventaData,
+      id: `V-${String(ventas.length + 1).padStart(3, '0')}`,
+    };
+    setVentas([nuevaVenta, ...ventas]);
+  };
+
+  const buscarClientes = (query: string): Cliente[] => {
+    if (!query) return clientes;
+    const lowerQuery = query.toLowerCase();
+    return clientes.filter(
+      (c) =>
+        c.nombre.toLowerCase().includes(lowerQuery) ||
+        c.email.toLowerCase().includes(lowerQuery) ||
+        c.telefono.includes(query)
+    );
+  };
+
+  const editarCliente = (id: number, clienteData: Omit<Cliente, 'id' | 'fecha'>) => {
+    setClientes(clientes.map(cliente =>
+      cliente.id === id
+        ? { ...cliente, ...clienteData }
+        : cliente
+    ));
+  };
+
+  const obtenerCliente = (id: number): Cliente | undefined => {
+    return clientes.find(cliente => cliente.id === id);
+  };
+
+  return (
+    <AppContext.Provider
+      value={{
+        clientes,
+        ventas,
+        agregarCliente,
+        agregarVenta,
+        buscarClientes,
+        editarCliente,
+        obtenerCliente,
+      }}
+    >
+      {children}
+    </AppContext.Provider>
+  );
+}
+
+export function useApp() {
+  const context = useContext(AppContext);
+  if (context === undefined) {
+    throw new Error('useApp must be used within an AppProvider');
+  }
+  return context;
+}

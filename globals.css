@@ -1,0 +1,40 @@
+import { createBrowserRouter, Navigate } from "react-router";
+import { Login } from "./components/Login";
+import { Layout } from "./components/Layout";
+import { Dashboard } from "./components/Dashboard";
+import { Clients } from "./components/Clients";
+import { Sales } from "./components/Sales";
+import { Reports } from "./components/Reports";
+
+export const router = createBrowserRouter([
+  {
+    path: "/",
+    element: <Login />,
+  },
+  {
+    path: "/",
+    element: <Layout />,
+    children: [
+      {
+        path: "dashboard",
+        element: <Dashboard />,
+      },
+      {
+        path: "clients",
+        element: <Clients />,
+      },
+      {
+        path: "sales",
+        element: <Sales />,
+      },
+      {
+        path: "reports",
+        element: <Reports />,
+      },
+    ],
+  },
+  {
+    path: "*",
+    element: <Navigate to="/" replace />,
+  },
+]);

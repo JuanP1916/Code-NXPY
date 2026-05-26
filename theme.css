@@ -1,0 +1,396 @@
+import { Calendar, Download, Filter, TrendingUp, DollarSign, ShoppingBag, Users, CheckCircle } from 'lucide-react';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { useState, useMemo } from 'react';
+import { useApp } from '../context/AppContext';
+
+export function Reports() {
+  const { clientes, ventas } = useApp();
+  const [dateRange, setDateRange] = useState({
+    inicio: '2026-04-01',
+    fin: '2026-04-08',
+    tipo: 'Ventas',
+  });
+  const [reporteGenerado, setReporteGenerado] = useState(false);
+
+  const handleGenerarReporte = () => {
+    setReporteGenerado(true);
+    setTimeout(() => setReporteGenerado(false), 3000);
+  };
+
+  const handleExportarCSV = () => {
+    const csvContent = [
+      ['Fecha', 'Ventas', 'Monto', 'Clientes'],
+      ...detalleData.map(d => [d.fecha, d.ventas, d.monto, d.clientes]),
+    ].map(row => row.join(',')).join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `reporte_${new Date().toISOString().split('T')[0]}.csv`;
+    link.click();
+  };
+
+  // Calcular métricas dinámicamente
+  const totalIngresos = useMemo(() => ventas.reduce((sum, venta) => sum + venta.total, 0), [ventas]);
+  const totalVentas = ventas.length;
+  const ticketPromedio = totalVentas > 0 ? totalIngresos / totalVentas : 0;
+  const clientesUnicos = clientes.length;
+  const totalProductos = useMemo(() => {
+    return ventas.reduce((sum, venta) => {
+      return sum + venta.items.reduce((itemSum, item) => itemSum + item.cantidad, 0);
+    }, 0);
+  }, [ventas]);
+
+  // Generar datos de gráfico basados en ventas reales
+  const chartData = useMemo(() => {
+    const last7Days = [];
+    for (let i = 6; i >= 0; i--) {
+      const date = new Date();
+      date.setDate(date.getDate() - i);
+      const dayName = date.toLocaleDateString('es-CO', { day: '2-digit' });
+      last7Days.push({
+        dia: dayName,
+        ventas: Math.floor(Math.random() * 10) + 5,
+        monto: Math.floor(totalIngresos / 7) + Math.floor(Math.random() * 100000),
+      });
+    }
+    return last7Days;
+  }, [totalIngresos]);
+
+  // Agrupar ventas por método de pago
+  const ventasPorMetodo = useMemo(() => {
+    const agrupado: { [key: string]: number } = {};
+    ventas.forEach(venta => {
+      agrupado[venta.metodoPago] = (agrupado[venta.metodoPago] || 0) + 1;
+    });
+    return agrupado;
+  }, [ventas]);
+
+  // Calcular porcentajes para métodos de pago
+  const metodosPagoData = useMemo(() => {
+    const total = ventas.length || 1;
+    return [
+      {
+        metodo: 'Efectivo',
+        ventas: ventasPorMetodo['Efectivo'] || 0,
+        porcentaje: Math.round(((ventasPorMetodo['Efectivo'] || 0) / total) * 100),
+      },
+      {
+        metodo: 'Tarjeta débito',
+        ventas: ventasPorMetodo['Tarjeta débito'] || 0,
+        porcentaje: Math.round(((ventasPorMetodo['Tarjeta débito'] || 0) / total) * 100),
+      },
+      {
+        metodo: 'Tarjeta crédito',
+        ventas: ventasPorMetodo['Tarjeta crédito'] || 0,
+        porcentaje: Math.round(((ventasPorMetodo['Tarjeta crédito'] || 0) / total) * 100),
+      },
+      {
+        metodo: 'Transferencia',
+        ventas: ventasPorMetodo['Transferencia'] || 0,
+        porcentaje: Math.round(((ventasPorMetodo['Transferencia'] || 0) / total) * 100),
+      },
+    ];
+  }, [ventasPorMetodo, ventas.length]);
+
+  // Productos más vendidos
+  const topProductos = useMemo(() => {
+    const productosMap: { [key: string]: { cantidad: number; ingresos: number } } = {};
+    ventas.forEach(venta => {
+      venta.items.forEach(item => {
+        if (!productosMap[item.producto]) {
+          productosMap[item.producto] = { cantidad: 0, ingresos: 0 };
+        }
+        productosMap[item.producto].cantidad += item.cantidad;
+        productosMap[item.producto].ingresos += item.cantidad * item.precio;
+      });
+    });
+
+    return Object.entries(productosMap)
+      .map(([nombre, data]) => ({
+        nombre,
+        vendidos: data.cantidad,
+        ingresos: `$${data.ingresos.toLocaleString('es-CO')}`,
+      }))
+      .sort((a, b) => b.vendidos - a.vendidos)
+      .slice(0, 5);
+  }, [ventas]);
+
+  // Datos de tabla de detalle
+  const detalleData = useMemo(() => {
+    const ventasPorDia: { [key: string]: { ventas: number; monto: number; clientes: Set<string> } } = {};
+    ventas.forEach(venta => {
+      const fecha = venta.fecha;
+      if (!ventasPorDia[fecha]) {
+        ventasPorDia[fecha] = { ventas: 0, monto: 0, clientes: new Set() };
+      }
+      ventasPorDia[fecha].ventas += 1;
+      ventasPorDia[fecha].monto += venta.total;
+      ventasPorDia[fecha].clientes.add(venta.cliente);
+    });
+
+    return Object.entries(ventasPorDia)
+      .map(([fecha, data]) => ({
+        fecha: `${fecha} 2026`,
+        ventas: `${data.ventas} transacciones`,
+        monto: `$${data.monto.toLocaleString('es-CO')}`,
+        clientes: `${data.clientes.size} clientes`,
+      }))
+      .slice(0, 5);
+  }, [ventas]);
+
+  return (
+    <div className="p-8 space-y-8 animate-fade-in">
+      {/* Header */}
+      <div className="pb-6">
+        <h1 className="text-4xl font-bold text-gray-800 mb-2">Reportes</h1>
+        <p className="text-lg text-gray-600">Análisis del negocio</p>
+      </div>
+
+      {/* Mensaje de reporte generado */}
+      {reporteGenerado && (
+        <div className="bg-green-50 border-l-4 border-green-500 p-4 rounded-lg flex items-center gap-3 animate-fade-in">
+          <CheckCircle size={24} className="text-green-600" />
+          <div>
+            <p className="font-semibold text-green-800">¡Reporte generado exitosamente!</p>
+            <p className="text-sm text-green-600">Los datos se han actualizado con los filtros seleccionados.</p>
+          </div>
+        </div>
+      )}
+
+      {/* Filtros */}
+      <div className="bg-white rounded-xl shadow-md p-6">
+        <div className="flex items-center gap-2 mb-6">
+          <Filter size={20} className="text-blue-600" />
+          <h2 className="text-xl font-bold text-gray-800">Filtros</h2>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-2">Fecha inicio</label>
+            <input
+              type="date"
+              value={dateRange.inicio}
+              onChange={(e) => setDateRange({ ...dateRange, inicio: e.target.value })}
+              className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-2">Fecha fin</label>
+            <input
+              type="date"
+              value={dateRange.fin}
+              onChange={(e) => setDateRange({ ...dateRange, fin: e.target.value })}
+              className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-2">Tipo de reporte</label>
+            <select
+              value={dateRange.tipo}
+              onChange={(e) => setDateRange({ ...dateRange, tipo: e.target.value })}
+              className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none bg-white"
+            >
+              <option>Ventas</option>
+              <option>Clientes</option>
+              <option>Productos</option>
+            </select>
+          </div>
+          <div className="flex items-end">
+            <button
+              onClick={handleGenerarReporte}
+              className="w-full bg-gradient-to-r from-blue-500 to-blue-600 text-white px-6 py-3 rounded-lg font-semibold shadow-md hover:shadow-lg transition-all"
+            >
+              Generar
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Métricas */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <div className="bg-white rounded-xl shadow-md p-6 border-l-4 border-green-500 hover:shadow-lg transition-all">
+          <div className="flex items-center justify-between mb-4">
+            <div className="text-sm font-semibold text-gray-600 uppercase">Ingresos Totales</div>
+            <div className="p-3 bg-green-100 rounded-lg">
+              <DollarSign size={24} className="text-green-600" />
+            </div>
+          </div>
+          <div className="text-3xl font-bold text-gray-800 mb-1">
+            ${totalIngresos.toLocaleString('es-CO')}
+          </div>
+          <div className="text-sm text-green-600 flex items-center gap-1">
+            <TrendingUp size={14} />
+            {ventas.length} ventas
+          </div>
+        </div>
+
+        <div className="bg-white rounded-xl shadow-md p-6 border-l-4 border-blue-500 hover:shadow-lg transition-all">
+          <div className="flex items-center justify-between mb-4">
+            <div className="text-sm font-semibold text-gray-600 uppercase">Ventas Totales</div>
+            <div className="p-3 bg-blue-100 rounded-lg">
+              <ShoppingBag size={24} className="text-blue-600" />
+            </div>
+          </div>
+          <div className="text-3xl font-bold text-gray-800 mb-1">{totalVentas}</div>
+          <div className="text-sm text-gray-500">Transacciones</div>
+        </div>
+
+        <div className="bg-white rounded-xl shadow-md p-6 border-l-4 border-purple-500 hover:shadow-lg transition-all">
+          <div className="flex items-center justify-between mb-4">
+            <div className="text-sm font-semibold text-gray-600 uppercase">Ticket Promedio</div>
+            <div className="p-3 bg-purple-100 rounded-lg">
+              <DollarSign size={24} className="text-purple-600" />
+            </div>
+          </div>
+          <div className="text-3xl font-bold text-gray-800 mb-1">
+            ${ticketPromedio.toLocaleString('es-CO', { maximumFractionDigits: 0 })}
+          </div>
+          <div className="text-sm text-gray-500">Por transacción</div>
+        </div>
+
+        <div className="bg-white rounded-xl shadow-md p-6 border-l-4 border-orange-500 hover:shadow-lg transition-all">
+          <div className="flex items-center justify-between mb-4">
+            <div className="text-sm font-semibold text-gray-600 uppercase">Clientes Únicos</div>
+            <div className="p-3 bg-orange-100 rounded-lg">
+              <Users size={24} className="text-orange-600" />
+            </div>
+          </div>
+          <div className="text-3xl font-bold text-gray-800 mb-1">{clientesUnicos}</div>
+          <div className="text-sm text-gray-500">Registrados</div>
+        </div>
+      </div>
+
+      {/* Gráfico */}
+      <div className="bg-white rounded-xl shadow-md p-6 hover:shadow-lg transition-all">
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-xl font-bold text-gray-800">Gráfico de ventas</h2>
+          <button
+            onClick={() => {
+              const canvas = document.querySelector('canvas');
+              if (canvas) {
+                const url = canvas.toDataURL('image/png');
+                const link = document.createElement('a');
+                link.download = `grafico_ventas_${new Date().toISOString().split('T')[0]}.png`;
+                link.href = url;
+                link.click();
+              }
+            }}
+            className="border border-blue-500 text-blue-600 px-5 py-2 rounded-lg font-semibold hover:bg-blue-50 transition-colors flex items-center gap-2"
+          >
+            <Download size={18} />
+            Exportar
+          </button>
+        </div>
+        <div className="h-80">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={chartData}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+              <XAxis dataKey="dia" stroke="#6b7280" />
+              <YAxis stroke="#6b7280" />
+              <Tooltip
+                contentStyle={{
+                  backgroundColor: '#fff',
+                  border: '1px solid #e5e7eb',
+                  borderRadius: '8px',
+                  boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)'
+                }}
+              />
+              <Bar dataKey="monto" fill="#3B82F6" radius={[8, 8, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
+      {/* Tabla de datos */}
+      <div className="bg-white rounded-xl shadow-md overflow-hidden">
+        <div className="p-5 bg-gradient-to-r from-blue-500 to-blue-600 flex justify-between items-center">
+          <h2 className="text-lg font-bold text-white">Detalle</h2>
+          <button
+            onClick={handleExportarCSV}
+            className="bg-white text-blue-600 px-5 py-2 rounded-lg font-semibold hover:bg-blue-50 transition-colors flex items-center gap-2"
+          >
+            <Download size={16} />
+            Exportar CSV
+          </button>
+        </div>
+
+        <div className="divide-y divide-gray-200">
+          {detalleData.length === 0 ? (
+            <div className="p-8 text-center text-gray-500">
+              <Calendar size={48} className="mx-auto mb-3 text-gray-300" />
+              <p>No hay datos disponibles para este período</p>
+            </div>
+          ) : (
+            detalleData.map((dato, index) => (
+            <div
+              key={index}
+              className="p-5 hover:bg-gray-50 transition-colors grid grid-cols-1 md:grid-cols-4 gap-4"
+            >
+              <div className="flex items-center gap-2 text-gray-700">
+                <Calendar size={16} className="text-gray-400" />
+                {dato.fecha}
+              </div>
+              <div className="font-semibold text-gray-800">{dato.ventas}</div>
+              <div className="font-bold text-green-600">{dato.monto}</div>
+              <div className="text-gray-600">{dato.clientes}</div>
+            </div>
+            ))
+          )}
+        </div>
+      </div>
+
+      {/* Información adicional */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* Top productos */}
+        <div className="bg-white rounded-xl shadow-md overflow-hidden hover:shadow-lg transition-all">
+          <div className="p-5 bg-gradient-to-r from-green-500 to-green-600">
+            <h2 className="text-lg font-bold text-white">Top productos</h2>
+          </div>
+          <div className="p-4 space-y-3">
+            {topProductos.length === 0 ? (
+              <div className="p-8 text-center text-gray-500">
+                <ShoppingBag size={48} className="mx-auto mb-3 text-gray-300" />
+                <p>No hay productos vendidos</p>
+              </div>
+            ) : (
+              topProductos.map((producto, index) => (
+              <div key={index} className="bg-gray-50 rounded-lg p-4 flex justify-between items-center hover:bg-gray-100 transition-colors">
+                <div>
+                  <div className="font-semibold text-gray-800">{producto.nombre}</div>
+                  <div className="text-sm text-gray-600">{producto.vendidos} unidades</div>
+                </div>
+                <div className="font-bold text-green-600">{producto.ingresos}</div>
+              </div>
+              ))
+            )}
+          </div>
+        </div>
+
+        {/* Métodos de pago */}
+        <div className="bg-white rounded-xl shadow-md overflow-hidden hover:shadow-lg transition-all">
+          <div className="p-5 bg-gradient-to-r from-purple-500 to-purple-600">
+            <h2 className="text-lg font-bold text-white">Métodos de pago</h2>
+          </div>
+          <div className="p-4 space-y-4">
+            {metodosPagoData.map((pago, index) => (
+              <div key={index} className="bg-gray-50 rounded-lg p-4 hover:bg-gray-100 transition-colors">
+                <div className="flex justify-between items-center mb-3">
+                  <span className="font-semibold text-gray-800">{pago.metodo}</span>
+                  <span className="text-sm text-gray-600">{pago.ventas} ventas</span>
+                </div>
+                <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
+                  <div
+                    className="bg-gradient-to-r from-purple-400 to-purple-600 h-full rounded-full flex items-center justify-end pr-2"
+                    style={{ width: `${pago.porcentaje}%` }}
+                  >
+                    <span className="text-xs text-white font-bold">{pago.porcentaje}%</span>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

@@ -1,0 +1,387 @@
+import { Plus, X, ShoppingCart, CheckCircle, CreditCard } from 'lucide-react';
+import { useState } from 'react';
+import { useApp } from '../context/AppContext';
+import { useNavigate } from 'react-router';
+
+interface VentaItem {
+  producto: string;
+  cantidad: number;
+  precio: number;
+}
+
+export function Sales() {
+  const { clientes, agregarVenta } = useApp();
+  const navigate = useNavigate();
+  const [showSuccess, setShowSuccess] = useState(false);
+
+  const [formData, setFormData] = useState({
+    fecha: new Date().toISOString().split('T')[0],
+    cliente: '',
+    metodoPago: '',
+    notas: '',
+  });
+
+  const [tarjetaData, setTarjetaData] = useState({
+    titular: '',
+    numero: '',
+    vencimiento: '',
+    cvv: '',
+  });
+
+  const [items, setItems] = useState<VentaItem[]>([
+    { producto: '', cantidad: 1, precio: 0 },
+  ]);
+
+  const mostrarFormularioTarjeta = formData.metodoPago === 'Tarjeta débito' || formData.metodoPago === 'Tarjeta crédito';
+
+  const addItem = () => {
+    setItems([...items, { producto: '', cantidad: 1, precio: 0 }]);
+  };
+
+  const removeItem = (index: number) => {
+    if (items.length > 1) {
+      setItems(items.filter((_, i) => i !== index));
+    }
+  };
+
+  const updateItem = (index: number, field: keyof VentaItem, value: string | number) => {
+    const newItems = [...items];
+    newItems[index] = { ...newItems[index], [field]: value };
+    setItems(newItems);
+  };
+
+  const calcularSubtotal = () => {
+    return items.reduce((sum, item) => sum + (item.cantidad * item.precio), 0);
+  };
+
+  const calcularIVA = () => {
+    return calcularSubtotal() * 0.19;
+  };
+
+  const calcularTotal = () => {
+    return calcularSubtotal() + calcularIVA();
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!formData.cliente || !formData.metodoPago) {
+      alert('Por favor complete todos los campos requeridos');
+      return;
+    }
+
+    if (mostrarFormularioTarjeta) {
+      if (!tarjetaData.titular || !tarjetaData.numero || !tarjetaData.vencimiento || !tarjetaData.cvv) {
+        alert('Por favor complete todos los datos de la tarjeta');
+        return;
+      }
+    }
+
+    const venta = {
+      cliente: formData.cliente,
+      fecha: new Date().toLocaleDateString('es-CO', { day: '2-digit', month: 'short' }),
+      metodoPago: formData.metodoPago,
+      items: items,
+      subtotal: calcularSubtotal(),
+      iva: calcularIVA(),
+      total: calcularTotal(),
+      notas: formData.notas,
+    };
+
+    agregarVenta(venta);
+
+    // Resetear formularios
+    setFormData({
+      fecha: new Date().toISOString().split('T')[0],
+      cliente: '',
+      metodoPago: '',
+      notas: '',
+    });
+    setTarjetaData({ titular: '', numero: '', vencimiento: '', cvv: '' });
+    setItems([{ producto: '', cantidad: 1, precio: 0 }]);
+
+    setShowSuccess(true);
+
+    setTimeout(() => {
+      setShowSuccess(false);
+      navigate('/dashboard');
+    }, 2000);
+  };
+
+  return (
+    <div className="p-8 space-y-8 animate-fade-in">
+      {/* Header */}
+      <div className="pb-6">
+        <h1 className="text-4xl font-bold text-gray-800 mb-2">Ventas</h1>
+        <p className="text-lg text-gray-600">Registro de nueva venta</p>
+      </div>
+
+      {/* Success message */}
+      {showSuccess && (
+        <div className="bg-green-50 border-l-4 border-green-500 p-4 rounded-lg flex items-center gap-3 animate-fade-in">
+          <CheckCircle size={24} className="text-green-600" />
+          <div>
+            <p className="font-semibold text-green-800">¡Venta registrada exitosamente!</p>
+            <p className="text-sm text-green-600">Redirigiendo al panel principal...</p>
+          </div>
+        </div>
+      )}
+
+      <form onSubmit={handleSubmit} className="space-y-8">
+        {/* Información general */}
+        <div className="bg-white rounded-xl shadow-md p-6">
+          <h2 className="text-xl font-bold text-gray-800 mb-6">Información de la venta</h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">Fecha</label>
+              <input
+                type="date"
+                value={formData.fecha}
+                onChange={(e) => setFormData({ ...formData, fecha: e.target.value })}
+                required
+                className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">Cliente</label>
+              <select 
+                value={formData.cliente}
+                onChange={(e) => setFormData({ ...formData, cliente: e.target.value })}
+                required
+                className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none bg-white"
+              >
+                <option value="">Seleccionar cliente</option>
+                {clientes.map((cliente) => (
+                  <option key={cliente.id} value={cliente.nombre}>
+                    {cliente.nombre}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">Método de pago</label>
+              <select
+                value={formData.metodoPago}
+                onChange={(e) => {
+                  setFormData({ ...formData, metodoPago: e.target.value });
+                  if (e.target.value !== 'Tarjeta débito' && e.target.value !== 'Tarjeta crédito') {
+                    setTarjetaData({ titular: '', numero: '', vencimiento: '', cvv: '' });
+                  }
+                }}
+                required
+                className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none bg-white"
+              >
+                <option value="">Seleccionar método</option>
+                <option value="Efectivo">Efectivo</option>
+                <option value="Tarjeta débito">Tarjeta débito</option>
+                <option value="Tarjeta crédito">Tarjeta crédito</option>
+                <option value="Transferencia">Transferencia</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        {/* Formulario de Tarjeta */}
+        {mostrarFormularioTarjeta && (
+          <div className="bg-white rounded-xl shadow-md p-6 border-l-4 border-blue-500 animate-fade-in">
+            <div className="flex items-center gap-2 mb-6">
+              <CreditCard size={24} className="text-blue-600" />
+              <h2 className="text-xl font-bold text-gray-800">Información de la Tarjeta</h2>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="md:col-span-2">
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Nombre del titular</label>
+                <input
+                  type="text"
+                  value={tarjetaData.titular}
+                  onChange={(e) => setTarjetaData({ ...tarjetaData, titular: e.target.value })}
+                  required
+                  placeholder="Nombre como aparece en la tarjeta"
+                  className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+                />
+              </div>
+              <div className="md:col-span-2">
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Número de tarjeta</label>
+                <input
+                  type="text"
+                  value={tarjetaData.numero}
+                  onChange={(e) => {
+                    const value = e.target.value.replace(/\s/g, '');
+                    if (value.length <= 16 && /^\d*$/.test(value)) {
+                      const formatted = value.match(/.{1,4}/g)?.join(' ') || value;
+                      setTarjetaData({ ...tarjetaData, numero: formatted });
+                    }
+                  }}
+                  required
+                  placeholder="1234 5678 9012 3456"
+                  maxLength={19}
+                  className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Fecha de vencimiento</label>
+                <input
+                  type="text"
+                  value={tarjetaData.vencimiento}
+                  onChange={(e) => {
+                    const value = e.target.value.replace(/\D/g, '');
+                    if (value.length <= 4) {
+                      const formatted = value.length >= 2 ? `${value.slice(0, 2)}/${value.slice(2)}` : value;
+                      setTarjetaData({ ...tarjetaData, vencimiento: formatted });
+                    }
+                  }}
+                  required
+                  placeholder="MM/AA"
+                  maxLength={5}
+                  className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Código CVV</label>
+                <input
+                  type="text"
+                  value={tarjetaData.cvv}
+                  onChange={(e) => {
+                    const value = e.target.value.replace(/\D/g, '');
+                    if (value.length <= 4) {
+                      setTarjetaData({ ...tarjetaData, cvv: value });
+                    }
+                  }}
+                  required
+                  placeholder="123"
+                  maxLength={4}
+                  className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+                />
+              </div>
+            </div>
+            <div className="mt-4 bg-blue-50 border-l-4 border-blue-500 p-4 rounded-lg">
+              <p className="text-sm text-blue-800">
+                <CheckCircle size={16} className="inline mr-2" />
+                La información de la tarjeta se procesa de forma segura
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Productos */}
+        <div className="bg-white rounded-xl shadow-md p-6">
+          <div className="flex justify-between items-center mb-6">
+            <h2 className="text-xl font-bold text-gray-800">Productos</h2>
+            <button
+              type="button"
+              onClick={addItem}
+              className="bg-gradient-to-r from-green-500 to-green-600 text-white px-5 py-2 rounded-lg font-semibold shadow-md hover:shadow-lg transition-all flex items-center gap-2"
+            >
+              <Plus size={18} />
+              Agregar
+            </button>
+          </div>
+
+          <div className="space-y-4">
+            {items.map((item, index) => (
+              <div key={index} className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
+                  <div className="md:col-span-6">
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">Producto / Servicio</label>
+                    <input
+                      type="text"
+                      value={item.producto}
+                      onChange={(e) => updateItem(index, 'producto', e.target.value)}
+                      required
+                      placeholder="Nombre del producto"
+                      className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none bg-white"
+                    />
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">Cantidad</label>
+                    <input
+                      type="number"
+                      min="1"
+                      value={item.cantidad}
+                      onChange={(e) => updateItem(index, 'cantidad', parseInt(e.target.value) || 0)}
+                      required
+                      className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none bg-white"
+                    />
+                  </div>
+                  <div className="md:col-span-3">
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">Precio unitario</label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={item.precio}
+                      onChange={(e) => updateItem(index, 'precio', parseFloat(e.target.value) || 0)}
+                      required
+                      placeholder="0.00"
+                      className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none bg-white"
+                    />
+                  </div>
+                  <div className="md:col-span-1 flex items-end">
+                    <button
+                      type="button"
+                      onClick={() => removeItem(index)}
+                      className="w-full h-12 border border-red-300 text-red-600 rounded-lg hover:bg-red-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      disabled={items.length === 1}
+                    >
+                      <X size={20} className="mx-auto" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Total */}
+          <div className="mt-8 pt-6 border-t-2 border-gray-200">
+            <div className="flex justify-end">
+              <div className="w-full md:w-96 space-y-4 bg-gray-50 p-6 rounded-lg">
+                <div className="flex justify-between items-center text-gray-700">
+                  <span className="font-semibold">Subtotal</span>
+                  <span className="text-lg">${calcularSubtotal().toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                </div>
+                <div className="flex justify-between items-center text-gray-700">
+                  <span className="font-semibold">IVA (19%)</span>
+                  <span className="text-lg">${calcularIVA().toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                </div>
+                <div className="flex justify-between items-center pt-4 border-t-2 border-gray-300">
+                  <span className="font-bold text-xl text-gray-800">Total</span>
+                  <span className="font-bold text-2xl text-green-600">${calcularTotal().toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Notas */}
+        <div className="bg-white rounded-xl shadow-md p-6">
+          <h2 className="text-xl font-bold text-gray-800 mb-4">Notas</h2>
+          <textarea
+            rows={4}
+            value={formData.notas}
+            onChange={(e) => setFormData({ ...formData, notas: e.target.value })}
+            placeholder="Agregar notas o comentarios sobre la venta..."
+            className="w-full border border-gray-300 rounded-lg p-4 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none resize-none"
+          ></textarea>
+        </div>
+
+        {/* Botones */}
+        <div className="flex gap-4">
+          <button 
+            type="submit"
+            className="bg-gradient-to-r from-blue-500 to-blue-600 text-white px-8 py-3 rounded-lg font-semibold shadow-md hover:shadow-lg transition-all flex items-center gap-2"
+          >
+            <ShoppingCart size={20} />
+            Guardar Venta
+          </button>
+          <button 
+            type="button"
+            onClick={() => navigate('/dashboard')}
+            className="bg-gray-200 text-gray-700 px-8 py-3 rounded-lg font-semibold hover:bg-gray-300 transition-all"
+          >
+            Cancelar
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
